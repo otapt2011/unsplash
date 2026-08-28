@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Unsplash DB Loader</title>
+
+  <!-- Font Awesome 6 (free) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+  <!-- Modern font: Inter (optional) -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg: #f9fafb;
+      --card-bg: #ffffff;
+      --text: #1f2937;
+      --text-muted: #6b7280;
+      --border: #e5e7eb;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --danger: #dc2626;
+      --radius: 0.5rem;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      height: 100%;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      font-family: var(--font);
+      font-size: 0.8rem;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.4;
+    }
+
+    header {
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    header i {
+      color: var(--primary);
+    }
+
+    main {
+      flex: 1;
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow-y: auto;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .card-title {
+      font-weight: 600;
+      font-size: 0.85rem;
+      margin-bottom: 2px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    input, button {
+      font-family: inherit;
+      font-size: 0.8rem;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: calc(var(--radius) - 0.2rem);
+      outline: none;
+      background: var(--card-bg);
+      color: var(--text);
+    }
+
+    input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+    }
+
+    button {
+      cursor: pointer;
+      background: var(--primary);
+      color: white;
+      border: none;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+    button:hover {
+      background: var(--primary-hover);
+    }
+    button:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: #e5e7eb;
+      color: var(--text);
+    }
+    .btn-secondary:hover {
+      background: #d1d5db;
+    }
+
+    .row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .row > * {
+      flex: 1;
+    }
+
+    #status {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      min-height: 1.2em;
+    }
+
+    #log {
+      background: #111827;
+      color: #e5e7eb;
+      font-family: monospace;
+      font-size: 0.7rem;
+      padding: 6px;
+      border-radius: calc(var(--radius) - 0.2rem);
+      height: 80px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    footer {
+      background: var(--card-bg);
+      border-top: 1px solid var(--border);
+      padding: 6px 12px;
+      text-align: center;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    .hidden { display: none; }
+
+    /* Tabs */
+    .tab-bar {
+      display: flex;
+      gap: 4px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      margin-bottom: 4px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .tab-btn {
+      flex: 0 0 auto;
+      background: #f3f4f6;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: calc(var(--radius) - 0.2rem);
+      font-size: 0.7rem;
+      padding: 4px 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+    .tab-btn:disabled {
+      background: #e5e7eb;
+      color: #9ca3af;
+      cursor: not-allowed;
+    }
+    #tabContent {
+      overflow-x: auto;
+      font-size: 0.7rem;
+    }
+    #tabContent table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    #tabContent th, #tabContent td {
+      padding: 4px 6px;
+      border: 1px solid var(--border);
+      text-align: left;
+      white-space: nowrap;
+    }
+    #tabContent th {
+      background: #f9fafb;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <i class="fas fa-database"></i>
+    <span>Unsplash DB Loader</span>
+  </header>
+
+  <main>
+    <!-- Action Buttons Card -->
+    <div class="card">
+      <div class="card-title">
+        <i class="fas fa-tasks"></i> Actions
+      </div>
+      <div class="row">
+        <button id="initBtn">
+          <i class="fas fa-play"></i> Initialize DB
+        </button>
+        <button id="startBtn" disabled>
+          <i class="fas fa-cloud-download-alt"></i> Populate
+        </button>
+        <button id="exportBtn" class="btn-secondary" disabled>
+          <i class="fas fa-download"></i> Export
+        </button>
+        <button id="importBtn" class="btn-secondary" disabled>
+          <i class="fas fa-upload"></i> Import
+        </button>
+      </div>
+      <input type="file" id="fileInput" accept=".sqlite,application/x-sqlite3" class="hidden">
+    </div>
+
+    <!-- Configuration Card -->
+    <div class="card">
+      <div class="card-title">
+        <i class="fas fa-cog"></i> Configuration
+      </div>
+      <label>
+        <i class="fas fa-key"></i>
+        <input type="password" id="accessKey" placeholder="Unsplash Access Key" autocomplete="off">
+      </label>
+      <div class="row">
+        <label style="flex:1">
+          <i class="fas fa-file-alt"></i>
+          <input type="number" id="pages" value="1" min="1" max="50" step="1">
+        </label>
+        <label style="flex:1">
+          <i class="fas fa-images"></i>
+          <input type="number" id="perPage" value="10" min="1" max="30" step="1">
+        </label>
+        <label style="flex:1">
+          <i class="fas fa-clock"></i>
+          <input type="number" id="delay" value="1000" min="0" max="10000" step="100">
+        </label>
+      </div>
+    </div>
+
+    <!-- Status Card -->
+    <div class="card">
+      <div class="card-title">
+        <i class="fas fa-info-circle"></i> Status
+      </div>
+      <div id="status">Database not initialized. Click "Initialize DB".</div>
+      <div id="log" class="hidden"></div>
+    </div>
+
+    <!-- Data Viewer Card -->
+    <div class="card">
+      <div class="card-title">
+        <i class="fas fa-table"></i> Data Viewer
+      </div>
+      <div class="tab-bar" id="tabBar">
+        <button class="tab-btn" data-view="v_photos_with_stats" disabled>
+          <i class="fas fa-image"></i> Photos
+        </button>
+        <button class="tab-btn" data-view="v_top_keywords" disabled>
+          <i class="fas fa-tags"></i> Keywords
+        </button>
+        <button class="tab-btn" data-view="v_photo_colors" disabled>
+          <i class="fas fa-palette"></i> Colors
+        </button>
+        <button class="tab-btn" data-view="v_photo_collections" disabled>
+          <i class="fas fa-folder"></i> Collections
+        </button>
+        <button class="tab-btn" data-view="v_photo_keywords" disabled>
+          <i class="fas fa-link"></i> Photo‑Keywords
+        </button>
+        <button class="tab-btn" data-view="v_photo_conversion_stats" disabled>
+          <i class="fas fa-chart-bar"></i> Conversions
+        </button>
+      </div>
+      <div id="tabContent">
+        <em>Select a tab to view data (requires database).</em>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <i class="fas fa-code"></i> with <i class="fas fa-heart"></i> – data from Unsplash API
+  </footer>
+
+  <!-- External scripts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+  <script src="unsplash-populator.js"></script>
+
+  <script>
+    (() => {
+      // ---- Retrieve saved settings (if any) ----
+      let unspl = null;
+      try {
+        unspl = JSON.parse(localStorage.getItem("unsplash"));
+      } catch (e) { unspl = null; }
+      const savedAccessKey = unspl?.accessKey || '';
+
+      // DOM elements
+      const initBtn = document.getElementById('initBtn');
+      const startBtn = document.getElementById('startBtn');
+      const exportBtn = document.getElementById('exportBtn');
+      const importBtn = document.getElementById('importBtn');
+      const fileInput = document.getElementById('fileInput');
+      const accessKeyInput = document.getElementById('accessKey');
+      const pagesInput = document.getElementById('pages');
+      const perPageInput = document.getElementById('perPage');
+      const delayInput = document.getElementById('delay');
+      const statusDiv = document.getElementById('status');
+      const logDiv = document.getElementById('log');
+      const tabBar = document.getElementById('tabBar');
+      const tabContent = document.getElementById('tabContent');
+      const tabButtons = [...tabBar.querySelectorAll('.tab-btn')];
+
+      accessKeyInput.value = savedAccessKey;
+
+      // Global variables
+      let db = null;
+      let SQL = null;
+      let activeView = null;
+
+      // Helper functions
+      function log(message) {
+        logDiv.classList.remove('hidden');
+        logDiv.textContent += message + '\n';
+        logDiv.scrollTop = logDiv.scrollHeight;
+      }
+
+      function setStatus(msg) {
+        statusDiv.textContent = msg;
+      }
+
+      function enableTabs(enabled) {
+        tabButtons.forEach(btn => btn.disabled = !enabled);
+      }
+
+      function setActiveTab(btn) {
+        tabButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      }
+
+      // Render SQL results into an HTML table using db.exec()
+      function renderTable(results) {
+        if (!results || results.length === 0) {
+          return '<p>No data available.</p>';
+        }
+
+        const firstResult = results[0];
+        const columns = firstResult.columns;
+        const rows = firstResult.values;
+
+        if (!columns || !rows || rows.length === 0) {
+          return '<p>No rows found.</p>';
+        }
+
+        let html = '<table><thead><tr>';
+        columns.forEach(col => html += `<th>${col}</th>`);
+        html += '</tr></thead><tbody>';
+
+        rows.forEach(row => {
+          html += '<tr>';
+          row.forEach(val => {
+            const displayVal = (val !== null && val !== undefined) ? val : 'NULL';
+            html += `<td>${displayVal}</td>`;
+          });
+          html += '</tr>';
+        });
+
+        html += '</tbody></table>';
+        return html;
+      }
+
+      // Query a view and display result
+      function showView(viewName) {
+        if (!db) {
+          tabContent.innerHTML = '<p>Database not initialized. Please click "Initialize DB" first.</p>';
+          return;
+        }
+        try {
+          const sql = `SELECT * FROM ${viewName}`;
+          const results = db.exec(sql);
+          tabContent.innerHTML = renderTable(results);
+        } catch (err) {
+          tabContent.innerHTML = `<p>Error querying ${viewName}: ${err.message}</p>`;
+        }
+      }
+
+      // Load SQL.js if not already loaded
+      async function loadSqlJs() {
+        if (SQL) return SQL;
+        SQL = await initSqlJs({
+          locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
+        });
+        return SQL;
+      }
+
+      // Initialize database (empty)
+      async function initDatabase() {
+        if (db) {
+          setStatus('Database already initialized.');
+          return;
+        }
+        setStatus('Loading SQLite...');
+        initBtn.disabled = true;
+        try {
+          await loadSqlJs();
+          db = new SQL.Database();
+
+          // Create schema (tables + views)
+          const schemaSQL = `
+            CREATE TABLE unsplash_photos (
+              photo_id TEXT PRIMARY KEY,
+              photo_url TEXT,
+              photo_image_url TEXT,
+              photo_submitted_at TEXT,
+              photo_featured INTEGER,
+              photo_width INTEGER,
+              photo_height INTEGER,
+              photo_aspect_ratio REAL,
+              photo_description TEXT,
+              photographer_username TEXT,
+              photographer_first_name TEXT,
+              photographer_last_name TEXT,
+              exif_camera_make TEXT,
+              exif_camera_model TEXT,
+              exif_iso INTEGER,
+              exif_aperture_value TEXT,
+              exif_focal_length TEXT,
+              exif_exposure_time TEXT,
+              photo_location_name TEXT,
+              photo_location_latitude REAL,
+              photo_location_longitude REAL,
+              photo_location_country TEXT,
+              photo_location_city TEXT,
+              stats_views INTEGER,
+              stats_downloads INTEGER,
+              ai_description TEXT,
+              ai_primary_landmark_name TEXT,
+              ai_primary_landmark_latitude REAL,
+              ai_primary_landmark_longitude REAL,
+              ai_primary_landmark_confidence TEXT,
+              blur_hash TEXT
+            );
+            CREATE TABLE unsplash_keywords (
+              photo_id TEXT,
+              keyword TEXT,
+              ai_service_1_confidence REAL,
+              ai_service_2_confidence REAL,
+              suggested_by_user INTEGER,
+              user_suggestion_source TEXT,
+              suggested_by_ai_service_3 INTEGER,
+              confirmed_by_ai_service_3 INTEGER,
+              PRIMARY KEY (photo_id, keyword),
+              FOREIGN KEY (photo_id) REFERENCES unsplash_photos(photo_id) ON DELETE CASCADE
+            );
+            CREATE TABLE unsplash_collections (
+              photo_id TEXT,
+              collection_id TEXT,
+              collection_title TEXT,
+              photo_collected_at TEXT,
+              collection_type TEXT,
+              PRIMARY KEY (photo_id, collection_id),
+              FOREIGN KEY (photo_id) REFERENCES unsplash_photos(photo_id) ON DELETE CASCADE
+            );
+            CREATE TABLE unsplash_conversions (
+              converted_at TEXT,
+              conversion_type TEXT,
+              keyword TEXT,
+              photo_id TEXT,
+              anonymous_user_id TEXT,
+              conversion_country TEXT,
+              device_type TEXT,
+              search_orientation_filter TEXT,
+              search_ordering TEXT,
+              FOREIGN KEY (photo_id) REFERENCES unsplash_photos(photo_id) ON DELETE CASCADE
+            );
+            CREATE TABLE unsplash_colors (
+              photo_id TEXT,
+              hex TEXT,
+              red INTEGER,
+              green INTEGER,
+              blue INTEGER,
+              keyword TEXT,
+              ai_coverage REAL,
+              ai_score REAL,
+              PRIMARY KEY (photo_id, hex),
+              FOREIGN KEY (photo_id) REFERENCES unsplash_photos(photo_id) ON DELETE CASCADE
+            );
+
+            CREATE VIEW v_photo_keywords AS
+            SELECT
+              p.photo_id,
+              p.photo_url,
+              p.photographer_username,
+              p.photo_submitted_at,
+              p.stats_views,
+              p.stats_downloads,
+              k.keyword,
+              k.ai_service_1_confidence,
+              k.ai_service_2_confidence,
+              k.suggested_by_user,
+              k.user_suggestion_source
+            FROM unsplash_photos p
+            JOIN unsplash_keywords k ON p.photo_id = k.photo_id;
+
+            CREATE VIEW v_photo_colors AS
+            SELECT
+              p.photo_id,
+              p.photo_url,
+              c.hex,
+              c.red,
+              c.green,
+              c.blue,
+              c.keyword AS color_keyword,
+              c.ai_coverage,
+              c.ai_score
+            FROM unsplash_photos p
+            JOIN unsplash_colors c ON p.photo_id = c.photo_id;
+
+            CREATE VIEW v_photo_collections AS
+            SELECT
+              p.photo_id,
+              p.photo_url,
+              c.collection_id,
+              c.collection_title,
+              c.collection_type,
+              c.photo_collected_at
+            FROM unsplash_photos p
+            JOIN unsplash_collections c ON p.photo_id = c.photo_id;
+
+            CREATE VIEW v_photo_conversion_stats AS
+            SELECT
+              photo_id,
+              COUNT(*) AS total_conversions,
+              SUM(CASE WHEN conversion_type = 'download' THEN 1 ELSE 0 END) AS download_count,
+              SUM(CASE WHEN conversion_type = 'click' THEN 1 ELSE 0 END) AS click_count,
+              COUNT(DISTINCT anonymous_user_id) AS unique_users,
+              COUNT(DISTINCT keyword) AS unique_keywords
+            FROM unsplash_conversions
+            GROUP BY photo_id;
+
+            CREATE VIEW v_top_keywords AS
+            SELECT
+              keyword,
+              COUNT(*) AS photo_count,
+              AVG(ai_service_1_confidence) AS avg_conf_service1,
+              AVG(ai_service_2_confidence) AS avg_conf_service2
+            FROM unsplash_keywords
+            GROUP BY keyword
+            ORDER BY photo_count DESC;
+
+            CREATE VIEW v_photos_with_stats AS
+            SELECT
+              p.*,
+              COALESCE(c.total_conversions, 0) AS total_conversions,
+              COALESCE(c.download_count, 0) AS download_count,
+              COALESCE(c.unique_users, 0) AS unique_users
+            FROM unsplash_photos p
+            LEFT JOIN v_photo_conversion_stats c ON p.photo_id = c.photo_id;
+          `;
+          db.run(schemaSQL);
+
+          setStatus('Database ready. You can now populate data.');
+          log('SQLite database created with schema and views.');
+          startBtn.disabled = false;
+          exportBtn.disabled = false;
+          importBtn.disabled = false;   // enable import after SQL.js is loaded
+          enableTabs(true);
+        } catch (err) {
+          setStatus('Failed to initialize SQLite: ' + err.message);
+          console.error(err);
+          initBtn.disabled = false;
+        }
+      }
+
+      // Import database from file
+      async function importDatabase(file) {
+        if (!file) return;
+        setStatus('Importing database...');
+        try {
+          await loadSqlJs();
+          const arrayBuffer = await file.arrayBuffer();
+          const bytes = new Uint8Array(arrayBuffer);
+          db = new SQL.Database(bytes);
+          setStatus('Database imported successfully.');
+          log('Imported database from file: ' + file.name);
+          // Disable start/init buttons as data already loaded
+          startBtn.disabled = true;
+          initBtn.disabled = true;
+          exportBtn.disabled = false;
+          importBtn.disabled = false;
+          enableTabs(true);
+          // Refresh active tab if any
+          if (activeView) showView(activeView);
+        } catch (err) {
+          setStatus('Import failed: ' + err.message);
+          log('ERROR: ' + err.message);
+          console.error(err);
+        }
+      }
+
+      // Start population
+      async function startPopulation() {
+        if (!db) {
+          setStatus('Please initialize the database first.');
+          return;
+        }
+
+        const accessKey = accessKeyInput.value.trim();
+        if (!accessKey) {
+          setStatus('Please enter an Unsplash Access Key.');
+          return;
+        }
+
+        // Save access key to localStorage for next time
+        try {
+          localStorage.setItem("unsplash", JSON.stringify({ accessKey }));
+        } catch (e) {}
+
+        const pages = parseInt(pagesInput.value, 10) || 1;
+        const perPage = parseInt(perPageInput.value, 10) || 10;
+        const delay = parseInt(delayInput.value, 10) || 1000;
+
+        startBtn.disabled = true;
+        exportBtn.disabled = true;
+        importBtn.disabled = true;   // prevent import during population
+        setStatus('Fetching photos...');
+        log('Starting population...');
+
+        try {
+          await window.populateUnsplash(db, {
+            accessKey,
+            pages,
+            perPage,
+            delayMs: delay
+          });
+          setStatus('Population complete!');
+          log('Population complete.');
+          if (activeView) showView(activeView);
+        } catch (err) {
+          console.error('Population error:', err);
+          const msg = (err && err.message) ? err.message : String(err);
+          setStatus('Error: ' + msg);
+          log('ERROR: ' + msg);
+        } finally {
+          startBtn.disabled = false;
+          exportBtn.disabled = false;
+          importBtn.disabled = false;
+        }
+      }
+
+      // Export database
+      function exportDatabase() {
+        if (!db) {
+          setStatus('No database to export. Initialize first.');
+          return;
+        }
+        const data = db.export();
+        const blob = new Blob([data], { type: 'application/x-sqlite3' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'unsplash_data.sqlite';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        log('Database exported as unsplash_data.sqlite');
+      }
+
+      // Event listeners
+      initBtn.addEventListener('click', initDatabase);
+      startBtn.addEventListener('click', startPopulation);
+      exportBtn.addEventListener('click', exportDatabase);
+
+      importBtn.addEventListener('click', () => {
+        fileInput.click();
+      });
+
+      fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) importDatabase(file);
+        fileInput.value = ''; // allow same file re-import
+      });
+
+      // Tab clicks
+      tabBar.addEventListener('click', (e) => {
+        const btn = e.target.closest('.tab-btn');
+        if (!btn || btn.disabled) return;
+        const viewName = btn.dataset.view;
+        activeView = viewName;
+        setActiveTab(btn);
+        showView(viewName);
+      });
+
+      // Initial state: tabs and import disabled until SQL.js is loaded
+      enableTabs(false);
+      importBtn.disabled = true; // will be enabled after init or SQL.js load
+    })();
+  </script>
+</body>
+</html>
