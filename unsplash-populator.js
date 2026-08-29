@@ -3,35 +3,7 @@
   
   const BASE_URL = 'https://api.unsplash.com';
   
-  /**
-   * Fetch a page of photos from Unsplash.
-   * @param {string} accessKey - Unsplash API access key.
-   * @param {number} page - Page number.
-   * @param {number} perPage - Photos per page.
-   * @returns {Promise<Array>} Array of photo objects.
-   */
-  async function fetchPhotos(accessKey, page = 1, perPage = 30) {
-    const url = `${BASE_URL}/photos`;
-    const headers = { Authorization: `Client-ID ${accessKey}` };
-    const params = new URLSearchParams({
-      page: String(page),
-      per_page: String(perPage),
-      // Note: 'collections' and 'stats' parameters do NOT add those fields to the list response.
-      // They are accepted but ignored by the API for the list endpoint.
-    });
-    
-    const response = await fetch(`${url}?${params}`, { headers });
-    if (!response.ok) {
-      throw new Error(`Unsplash API error: ${response.status} ${response.statusText}`);
-    }
-    return response.json();
-  }
-  
-  /**
-   * Convert a hex color string (e.g., "0c7373") to RGB components.
-   * @param {string} hex - Hex color without '#'.
-   * @returns {object|null} { r, g, b } or null if invalid.
-   */
+  // Helper: hex to RGB
   function hexToRgb(hex) {
     if (!hex || typeof hex !== 'string' || hex.length !== 6) return null;
     const r = parseInt(hex.substring(0, 2), 16);
@@ -41,50 +13,75 @@
     return { r, g, b };
   }
   
-  /**
-   * Insert a single photo and its dominant color into the database.
-   * @param {object} db - Database connection with `run` method.
-   * @param {object} photo - Photo object from the list endpoint.
-   */
-  function insertPhoto(db, photo) {
-    // ---------- Extract fields that DO exist in the list response ----------
-    const photoId = photo?.id ?? null;
-    const photoUrl = photo?.links?.html ?? null;
-    const photoImageUrl = photo?.urls?.raw ?? photo?.urls?.full ?? null;
-    const submittedAt = photo?.created_at ?? null;
-    const width = photo?.width ?? null;
-    const height = photo?.height ?? null;
-    const aspectRatio = (height && width) ? width / height : null;
-    const description = photo?.description ?? photo?.alt_description ?? null;
-    const photographerUsername = photo?.user?.username ?? null;
-    const photographerFirstName = photo?.user?.first_name ?? null;
-    const photographerLastName = photo?.user?.last_name ?? null;
-    const blurHash = photo?.blur_hash ?? null;
+  // Fetch a page of photos from the list endpoint
+  async function fetchPhotosPage(accessKey, page, perPage) {
+    const url = `${BASE_URL}/photos?page=${page}&per_page=${perPage}`;
+    const headers = { Authorization: `Client-ID ${accessKey}` };
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+      throw new Error(`List request failed: ${response.status} ${response.statusText}`);
+    }
+    return response.json();
+  }
+  
+  // Fetch full details for a single photo
+  async function fetchPhotoDetails(accessKey, photoId) {
+    const url = `${BASE_URL}/photos/${photoId}?stats=true&exif=true&collections=public&tags=true`;
+    const headers = { Authorization: `Client-ID ${accessKey}` };
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+      throw new Error(`Detail request failed for ${photoId}: ${response.status} ${response.statusText}`);
+    }
+    return response.json();
+  }
+  
+  // Insert a photo using list data (and optionally detail data)
+  function insertPhoto(db, photo, detailData = null) {
+    const p = detailData || photo; // use detail if available, else list
+    const photoId = p.id;
+    const photoUrl = p.links?.html ?? null;
+    const photoImageUrl = p.urls?.raw ?? p.urls?.full ?? null;
+    const submittedAt = p.created_at ?? null;
+    const photoFeatured = p.promoted_at ? 1 : 0;
+    const width = p.width ?? null;
+    const height = p.height ?? null;
+    const aspectRatio = (width && height) ? width / height : null;
+    const description = p.description ?? p.alt_description ?? null;
+    const photographerUsername = p.user?.username ?? null;
+    const photographerFirstName = p.user?.first_name ?? null;
+    const photographerLastName = p.user?.last_name ?? null;
+    const blurHash = p.blur_hash ?? null;
     
-    // Derive "featured" from promoted_at: if not null, photo is promoted (featured)
-    const photoFeatured = photo?.promoted_at ? 1 : 0;
+    // EXIF (from detail)
+    const exif = p.exif ?? {};
+    const exifCameraMake = exif.make ?? null;
+    const exifCameraModel = exif.model ?? null;
+    const exifIso = exif.iso ?? null;
+    const exifAperture = exif.aperture ?? null;
+    const exifFocalLength = exif.focal_length ?? null;
+    const exifExposureTime = exif.exposure_time ?? null;
     
-    // ---------- Fields that are NOT present in list endpoint: set to null ----------
-    const exifCameraMake = null;
-    const exifCameraModel = null;
-    const exifIso = null;
-    const exifAperture = null;
-    const exifFocalLength = null;
-    const exifExposureTime = null;
-    const locName = null;
-    const locLat = null;
-    const locLon = null;
-    const locCountry = null;
-    const locCity = null;
-    const statsViews = null;
-    const statsDownloads = null;
-    const aiDescription = null;
-    const aiLandmarkName = null;
-    const aiLandmarkLat = null;
-    const aiLandmarkLon = null;
-    const aiLandmarkConfidence = null;
+    // Location (from detail)
+    const loc = p.location ?? {};
+    const locName = loc.name ?? null;
+    const locLat = loc.position?.latitude ?? null;
+    const locLon = loc.position?.longitude ?? null;
+    const locCountry = loc.country ?? null;
+    const locCity = loc.city ?? null;
     
-    // Insert photo record
+    // Stats (from detail's stats object)
+    const stats = p.stats ?? {};
+    const statsViews = stats.views ?? null;
+    const statsDownloads = stats.downloads ?? null;
+    
+    // AI fields (not standard)
+    const aiDescription = p.ai_description ?? null;
+    const aiLandmarkName = p.ai_primary_landmark_name ?? null;
+    const aiLandmarkLat = p.ai_primary_landmark_latitude ?? null;
+    const aiLandmarkLon = p.ai_primary_landmark_longitude ?? null;
+    const aiLandmarkConfidence = p.ai_primary_landmark_confidence ?? null;
+    
+    // Insert or replace into unsplash_photos
     db.run(
       `INSERT OR REPLACE INTO unsplash_photos (
         photo_id, photo_url, photo_image_url, photo_submitted_at,
@@ -110,8 +107,8 @@
       ]
     );
     
-    // ---------- Insert dominant color (from the 'color' field) ----------
-    const colorHex = photo?.color;
+    // Insert dominant color (from list or detail)
+    const colorHex = p.color;
     if (colorHex && colorHex.length === 6) {
       const rgb = hexToRgb(colorHex);
       if (rgb) {
@@ -124,48 +121,64 @@
       }
     }
     
-    // NOTE: The list endpoint does NOT provide tags or collections.
-    // If you need keywords/collections, you must fetch each photo individually
-    // via `GET /photos/{id}` (which may include tags, collections, exif, location).
-    // This script intentionally omits them to avoid excessive API calls.
+    // Insert collections (if present in detail)
+    const collections = p.collections ?? [];
+    for (const col of collections) {
+      if (col.id) {
+        db.run(
+          `INSERT OR IGNORE INTO unsplash_collections (
+            photo_id, collection_id, collection_title, collection_type
+          ) VALUES (?,?,?,?)`,
+          [photoId, col.id, col.title ?? null, col.type ?? 'public']
+        );
+      }
+    }
+    
+    // Insert keywords from tags (if present)
+    const tags = p.tags ?? [];
+    for (const tag of tags) {
+      const keyword = tag.title ?? tag.source?.title;
+      if (keyword) {
+        db.run(
+          `INSERT OR IGNORE INTO unsplash_keywords (photo_id, keyword) VALUES (?, ?)`,
+          [photoId, keyword]
+        );
+      }
+    }
   }
   
-  /**
-   * Main function to populate the database.
-   * @param {object} db - SQLite database object (must have `run` method).
-   * @param {object} options - { accessKey, pages, perPage, delayMs }
-   */
+  // Main populate function – only list data, no details
   async function populateDatabase(db, options = {}) {
     const {
       accessKey,
       pages = 1,
-      perPage = 30,
+      perPage = 10,
       delayMs = 1000,
     } = options;
     
-    if (!accessKey) {
-      throw new Error('Unsplash access key is required. Pass it in options.accessKey.');
-    }
-    
-    console.log(`Starting data collection: ${pages} page(s), ${perPage} photos per page.`);
+    if (!accessKey) throw new Error('Access key required');
     
     for (let page = 1; page <= pages; page++) {
-      console.log(`Fetching page ${page}...`);
-      const photos = await fetchPhotos(accessKey, page, perPage);
-      
-      for (const photo of photos) {
-        insertPhoto(db, photo);
+      console.log(`Fetching list page ${page}...`);
+      const listPhotos = await fetchPhotosPage(accessKey, page, perPage);
+      for (const photo of listPhotos) {
+        insertPhoto(db, photo); // insert with list data only
       }
-      
-      // Optional delay to respect rate limits
-      if (delayMs > 0 && page < pages) {
+      if (delayMs > 0) {
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
     }
-    
-    console.log('Data population complete.');
   }
   
-  // Export the function (attaches to global object)
+  // New function: fetch details for one photo and update DB
+  async function fetchAndUpdatePhotoDetails(db, accessKey, photoId) {
+    console.log(`Fetching details for ${photoId}...`);
+    const detailData = await fetchPhotoDetails(accessKey, photoId);
+    insertPhoto(db, null, detailData); // pass detailData as second argument
+    return detailData;
+  }
+  
+  // Expose functions globally
   window.populateUnsplash = populateDatabase;
+  window.fetchAndUpdatePhotoDetails = fetchAndUpdatePhotoDetails;
 })();
