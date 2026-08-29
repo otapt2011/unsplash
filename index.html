@@ -210,50 +210,43 @@
       color: #9ca3af;
       cursor: not-allowed;
     }
-    #tabContent {
-      overflow-x: auto;
-      font-size: 0.7rem;
-    }
-    #tabContent table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    #tabContent th, #tabContent td {
-      padding: 4px 6px;
-      border: 1px solid var(--border);
-      text-align: left;
-      white-space: nowrap;
-    }
-    #tabContent th {
-      background: #f9fafb;
-      font-weight: 600;
-    }
-    #tabContent {
+#tabContent {
   overflow-x: auto;
   font-size: 0.7rem;
 }
+
 #tabContent table {
-  width: 100%;
+  width: max-content;          /* table can be wider than container */
+  min-width: 100%;             /* but at least full width */
   border-collapse: collapse;
-  table-layout: fixed;            /* helps constrain column widths */
 }
-#tabContent th, #tabContent td {
-  padding: 4px 6px;
+
+#tabContent th,
+#tabContent td {
+  padding: 4px 8px;
   border: 1px solid var(--border);
   text-align: left;
-  overflow: hidden;               /* hide overflow */
-  text-overflow: ellipsis;        /* show ellipsis for long content */
-  white-space: nowrap;            /* keep single line, but can be overridden */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 250px;            /* limit any single column width */
 }
+
 #tabContent th {
   background: #f9fafb;
   font-weight: 600;
+  position: sticky;
+  top: 0;
 }
-/* Allow specific columns to wrap if needed (e.g., description) */
-#tabContent td.wrap {
+
+/* Allow certain columns (e.g., description) to wrap instead of truncate */
+#tabContent td.wrap,
+#tabContent th.wrap {
   white-space: normal;
   word-break: break-word;
+  max-width: 350px;
 }
+
 #tabContent td a {
   color: var(--primary);
   text-decoration: none;
@@ -433,14 +426,16 @@ function renderTable(results, viewName) {
   }
   
   const photoIdIndex = columns.indexOf('photo_id');
-  const maxTextLength = 30; // adjust as needed
+  const maxTextLength = 40; // adjust as desired
   
-  // Helper to format cell content
+  // Determine which columns should be allowed to wrap
+  const wrapColumns = columns.filter(col => /description|title|bio|name|alt|location/i.test(col));
+  
   function formatCell(value, columnName) {
     if (value === null || value === undefined) return 'NULL';
     let str = String(value);
     
-    // If URL, create a link with truncated display
+    // If URL, show as a link with truncated text
     if (str.startsWith('http://') || str.startsWith('https://')) {
       let display = str;
       if (display.length > maxTextLength) {
@@ -449,7 +444,7 @@ function renderTable(results, viewName) {
       return `<a href="${str}" target="_blank" title="${str}">${display}</a>`;
     }
     
-    // Truncate long strings and add title
+    // Truncate long strings and add a tooltip
     if (str.length > maxTextLength) {
       const truncated = str.substring(0, maxTextLength) + '…';
       return `<span title="${str}">${truncated}</span>`;
@@ -459,9 +454,8 @@ function renderTable(results, viewName) {
   
   let html = '<table><thead><tr>';
   columns.forEach(col => {
-    // Add a class to header if it's a "wrap" column
-    const isWrapColumn = /description|title|bio|name/i.test(col);
-    html += `<th class="${isWrapColumn ? 'wrap' : ''}">${col}</th>`;
+    const wrapClass = wrapColumns.includes(col) ? 'wrap' : '';
+    html += `<th class="${wrapClass}">${col}</th>`;
   });
   if (photoIdIndex !== -1) {
     html += '<th>Actions</th>';
@@ -472,9 +466,8 @@ function renderTable(results, viewName) {
     html += '<tr>';
     row.forEach((val, idx) => {
       const colName = columns[idx];
-      const isWrapColumn = /description|title|bio|name/i.test(colName);
-      const cellContent = formatCell(val, colName);
-      html += `<td class="${isWrapColumn ? 'wrap' : ''}">${cellContent}</td>`;
+      const wrapClass = wrapColumns.includes(colName) ? 'wrap' : '';
+      html += `<td class="${wrapClass}">${formatCell(val, colName)}</td>`;
     });
     
     if (photoIdIndex !== -1) {
