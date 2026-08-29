@@ -358,6 +358,7 @@
       const tabButtons = [...tabBar.querySelectorAll('.tab-btn')];
 
       accessKeyInput.value = savedAccessKey;
+     
 
       // Global variables
       let db = null;
@@ -659,9 +660,11 @@
 
         // Save access key to localStorage for next time
         try {
-          localStorage.setItem("unsplash", JSON.stringify({ accessKey }));
-        } catch (e) {}
-
+  const stored = JSON.parse(localStorage.getItem("unsplash") || "{}");
+  stored.accessKey = accessKey;
+  localStorage.setItem("unsplash", JSON.stringify(stored));
+} catch (e) {}
+       
         const pages = parseInt(pagesInput.value, 10) || 1;
         const perPage = parseInt(perPageInput.value, 10) || 10;
         const delay = parseInt(delayInput.value, 10) || 1000;
