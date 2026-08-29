@@ -12,6 +12,9 @@
         photo_id TEXT PRIMARY KEY,
         photo_url TEXT,
         photo_image_url TEXT,
+        photo_download_url TEXT,
+        photo_download_location TEXT,
+        photo_likes INTEGER,                -- NEW
         photo_submitted_at TEXT,
         photo_featured INTEGER,
         photo_width INTEGER,
@@ -163,17 +166,22 @@
   }
 
   // ------------------------------------------------------------
-  //  API FETCHING AND INSERTION
+  //  HELPER FUNCTIONS
   // ------------------------------------------------------------
   function hexToRgb(hex) {
-    if (!hex || typeof hex !== 'string' || hex.length !== 6) return null;
-    const r = parseInt(hex.substring(0, 2), 16);
-    const g = parseInt(hex.substring(2, 4), 16);
-    const b = parseInt(hex.substring(4, 6), 16);
+    if (!hex || typeof hex !== 'string') return null;
+    const cleanHex = hex.replace(/^#/, '');
+    if (cleanHex.length !== 6) return null;
+    const r = parseInt(cleanHex.substring(0, 2), 16);
+    const g = parseInt(cleanHex.substring(2, 4), 16);
+    const b = parseInt(cleanHex.substring(4, 6), 16);
     if (isNaN(r) || isNaN(g) || isNaN(b)) return null;
     return { r, g, b };
   }
 
+  // ------------------------------------------------------------
+  //  API FETCHING AND INSERTION
+  // ------------------------------------------------------------
   async function fetchPhotosPage(accessKey, page, perPage) {
     const url = `${BASE_URL}/photos?page=${page}&per_page=${perPage}`;
     const headers = { Authorization: `Client-ID ${accessKey}` };
@@ -199,6 +207,9 @@
     const photoId = p.id;
     const photoUrl = p.links?.html ?? null;
     const photoImageUrl = p.urls?.raw ?? p.urls?.full ?? null;
+    const photoDownloadUrl = p.links?.download ?? null;
+    const photoDownloadLocation = p.links?.download_location ?? null;
+    const photoLikes = p.likes ?? null;   // NEW
     const submittedAt = p.created_at ?? null;
     const photoFeatured = p.promoted_at ? 1 : 0;
     const width = p.width ?? null;
@@ -237,9 +248,9 @@
 
     db.run(
       `INSERT OR REPLACE INTO unsplash_photos (
-        photo_id, photo_url, photo_image_url, photo_submitted_at,
-        photo_featured, photo_width, photo_height, photo_aspect_ratio,
-        photo_description, photographer_username, photographer_first_name,
+        photo_id, photo_url, photo_image_url, photo_download_url, photo_download_location,
+        photo_likes, photo_submitted_at, photo_featured, photo_width, photo_height,
+        photo_aspect_ratio, photo_description, photographer_username, photographer_first_name,
         photographer_last_name, exif_camera_make, exif_camera_model,
         exif_iso, exif_aperture_value, exif_focal_length, exif_exposure_time,
         photo_location_name, photo_location_latitude, photo_location_longitude,
@@ -247,32 +258,35 @@
         stats_downloads, ai_description, ai_primary_landmark_name,
         ai_primary_landmark_latitude, ai_primary_landmark_longitude,
         ai_primary_landmark_confidence, blur_hash
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
-        photoId, photoUrl, photoImageUrl, submittedAt,
-        photoFeatured, width, height, aspectRatio, description,
-        photographerUsername, photographerFirstName, photographerLastName,
-        exifCameraMake, exifCameraModel, exifIso, exifAperture,
-        exifFocalLength, exifExposureTime, locName, locLat, locLon,
-        locCountry, locCity, statsViews, statsDownloads, aiDescription,
-        aiLandmarkName, aiLandmarkLat, aiLandmarkLon, aiLandmarkConfidence,
-        blurHash
+        photoId, photoUrl, photoImageUrl, photoDownloadUrl, photoDownloadLocation,
+        photoLikes, submittedAt, photoFeatured, width, height,
+        aspectRatio, description, photographerUsername, photographerFirstName,
+        photographerLastName, exifCameraMake, exifCameraModel,
+        exifIso, exifAperture, exifFocalLength, exifExposureTime,
+        locName, locLat, locLon, locCountry, locCity, statsViews,
+        statsDownloads, aiDescription, aiLandmarkName,
+        aiLandmarkLat, aiLandmarkLon, aiLandmarkConfidence, blurHash
       ]
     );
 
+    // Insert dominant color (fixed for leading '#')
     const colorHex = p.color;
-    if (colorHex && colorHex.length === 6) {
+    if (colorHex) {
       const rgb = hexToRgb(colorHex);
       if (rgb) {
+        const cleanHex = colorHex.replace(/^#/, '').toLowerCase();
         db.run(
           `INSERT OR IGNORE INTO unsplash_colors (
             photo_id, hex, red, green, blue, keyword, ai_coverage, ai_score
           ) VALUES (?,?,?,?,?,?,?,?)`,
-          [photoId, colorHex.toLowerCase(), rgb.r, rgb.g, rgb.b, null, null, null]
+          [photoId, cleanHex, rgb.r, rgb.g, rgb.b, null, null, null]
         );
       }
     }
 
+    // Collections (only from detail)
     const collections = p.collections ?? [];
     for (const col of collections) {
       if (col.id) {
@@ -285,6 +299,7 @@
       }
     }
 
+    // Keywords from tags (only from detail)
     const tags = p.tags ?? [];
     for (const tag of tags) {
       const keyword = tag.title ?? tag.source?.title;
