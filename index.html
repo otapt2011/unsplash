@@ -228,6 +228,39 @@
       background: #f9fafb;
       font-weight: 600;
     }
+    #tabContent {
+  overflow-x: auto;
+  font-size: 0.7rem;
+}
+#tabContent table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;            /* helps constrain column widths */
+}
+#tabContent th, #tabContent td {
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  text-align: left;
+  overflow: hidden;               /* hide overflow */
+  text-overflow: ellipsis;        /* show ellipsis for long content */
+  white-space: nowrap;            /* keep single line, but can be overridden */
+}
+#tabContent th {
+  background: #f9fafb;
+  font-weight: 600;
+}
+/* Allow specific columns to wrap if needed (e.g., description) */
+#tabContent td.wrap {
+  white-space: normal;
+  word-break: break-word;
+}
+#tabContent td a {
+  color: var(--primary);
+  text-decoration: none;
+}
+#tabContent td a:hover {
+  text-decoration: underline;
+}
   </style>
 </head>
 <body>
@@ -385,37 +418,100 @@
         btn.classList.add('active');
       }
 
-      // Render SQL results into an HTML table using db.exec()
-      function renderTable(results) {
-        if (!results || results.length === 0) {
-          return '<p>No data available.</p>';
-        }
-
-        const firstResult = results[0];
-        const columns = firstResult.columns;
-        const rows = firstResult.values;
-
-        if (!columns || !rows || rows.length === 0) {
-          return '<p>No rows found.</p>';
-        }
-
-        let html = '<table><thead><tr>';
-        columns.forEach(col => html += `<th>${col}</th>`);
-        html += '</tr></thead><tbody>';
-
-        rows.forEach(row => {
-          html += '<tr>';
-          row.forEach(val => {
-            const displayVal = (val !== null && val !== undefined) ? val : 'NULL';
-            html += `<td>${displayVal}</td>`;
-          });
-          html += '</tr>';
-        });
-
-        html += '</tbody></table>';
-        return html;
+// Render SQL results into an HTML table, with optional detail buttons
+function renderTable(results, viewName) {
+  if (!results || results.length === 0) {
+    return '<p>No data available.</p>';
+  }
+  
+  const firstResult = results[0];
+  const columns = firstResult.columns;
+  const rows = firstResult.values;
+  
+  if (!columns || !rows || rows.length === 0) {
+    return '<p>No rows found.</p>';
+  }
+  
+  const photoIdIndex = columns.indexOf('photo_id');
+  const maxTextLength = 30; // adjust as needed
+  
+  // Helper to format cell content
+  function formatCell(value, columnName) {
+    if (value === null || value === undefined) return 'NULL';
+    let str = String(value);
+    
+    // If URL, create a link with truncated display
+    if (str.startsWith('http://') || str.startsWith('https://')) {
+      let display = str;
+      if (display.length > maxTextLength) {
+        display = display.substring(0, maxTextLength) + '…';
       }
+      return `<a href="${str}" target="_blank" title="${str}">${display}</a>`;
+    }
+    
+    // Truncate long strings and add title
+    if (str.length > maxTextLength) {
+      const truncated = str.substring(0, maxTextLength) + '…';
+      return `<span title="${str}">${truncated}</span>`;
+    }
+    return str;
+  }
+  
+  let html = '<table><thead><tr>';
+  columns.forEach(col => {
+    // Add a class to header if it's a "wrap" column
+    const isWrapColumn = /description|title|bio|name/i.test(col);
+    html += `<th class="${isWrapColumn ? 'wrap' : ''}">${col}</th>`;
+  });
+  if (photoIdIndex !== -1) {
+    html += '<th>Actions</th>';
+  }
+  html += '</tr></thead><tbody>';
+  
+  rows.forEach(row => {
+    html += '<tr>';
+    row.forEach((val, idx) => {
+      const colName = columns[idx];
+      const isWrapColumn = /description|title|bio|name/i.test(colName);
+      const cellContent = formatCell(val, colName);
+      html += `<td class="${isWrapColumn ? 'wrap' : ''}">${cellContent}</td>`;
+    });
+    
+    if (photoIdIndex !== -1) {
+      const photoId = row[photoIdIndex];
+      html += `<td><button class="fetch-detail-btn" data-photo-id="${photoId}">
+                 <i class="fas fa-sync-alt"></i> Details
+               </button></td>`;
+    }
+    html += '</tr>';
+  });
+  
+  html += '</tbody></table>';
+  return html;
+}
 
+// Query a view and display result, then attach click handlers
+function showView(viewName) {
+  if (!db) {
+    tabContent.innerHTML = '<p>Database not initialized.</p>';
+    return;
+  }
+  try {
+    const sql = `SELECT * FROM ${viewName}`;
+    const results = db.exec(sql);
+    tabContent.innerHTML = renderTable(results, viewName);
+    
+    // Attach event listeners to detail buttons
+    tabContent.querySelectorAll('.fetch-detail-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const photoId = btn.dataset.photoId;
+        await fetchDetailForPhoto(photoId);
+      });
+    });
+  } catch (err) {
+    tabContent.innerHTML = `<p>Error querying ${viewName}: ${err.message}</p>`;
+  }
+}
       // Query a view and display result
       function showView(viewName) {
         if (!db) {
@@ -431,6 +527,31 @@
         }
       }
 
+async function fetchDetailForPhoto(photoId) {
+  const accessKey = accessKeyInput.value.trim();
+  if (!accessKey) {
+    setStatus('Please enter an Unsplash Access Key.');
+    return;
+  }
+  
+  // Disable the button temporarily
+  const btn = tabContent.querySelector(`[data-photo-id="${photoId}"]`);
+  if (btn) btn.disabled = true;
+  
+  setStatus(`Fetching details for ${photoId}...`);
+  try {
+    await window.fetchAndUpdatePhotoDetails(db, accessKey, photoId);
+    setStatus(`Details for ${photoId} updated.`);
+    log(`Fetched details for ${photoId}`);
+    // Refresh current view
+    if (activeView) showView(activeView);
+  } catch (err) {
+    setStatus(`Error fetching details: ${err.message}`);
+    log(`ERROR: ${err.message}`);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
       // Load SQL.js if not already loaded
       async function loadSqlJs() {
         if (SQL) return SQL;
